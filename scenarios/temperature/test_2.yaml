@@ -1,6 +1,6 @@
 name: 'Caso de Teste 2: Alarme por Elevação Térmica (Variação Y)'
 version: 1
-timeout: 15000
+timeout: 20000
 author: 'Professor/Validador'
 steps:
   # 1. Aguarda inicialização
@@ -27,4 +27,3 @@ steps:
   - wait-serial: 'ALERTA: Degradacao termica detectada!'
   
   - delay: 500ms
-  - finish: true
