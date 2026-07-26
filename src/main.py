@@ -1,4 +1,3 @@
-print("Sistema Kanban Inicializado")
 """
 Processo Seletivo – Intensivo Maker | IoT
 Projeto: Sistema de Monitoramento de Temperatura e Abertura de Porta (Smart Cooler / Estufa)
