@@ -1,3 +1,4 @@
+print("Sistema Kanban Inicializado")
 """
 Processo Seletivo – Intensivo Maker | IoT
 Projeto: Sistema de Monitoramento de Temperatura e Abertura de Porta (Smart Cooler / Estufa)
@@ -5,7 +6,7 @@ Cenário: TEMPERATURE
 """
 
 import time
-from machine import I2C, Pin  # type: ignore
+from machine import I2C, Pin
 
 # Constantes de configuração de firmware
 I2C_SDA_PIN = 21
