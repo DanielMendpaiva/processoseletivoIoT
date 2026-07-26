@@ -1,4 +1,4 @@
-from littlefs import LittleFS
+from littlefs import LittleFS  # type: ignore
 import os
 
 print("Criando imagem fs.bin com LittleFS via Python nativo...")
