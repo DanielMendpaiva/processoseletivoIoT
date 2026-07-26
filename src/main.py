@@ -133,6 +133,7 @@ def main():
         if time.ticks_diff(now_ms, last_poll_ms) >= POLL_INTERVAL_MS:
             last_poll_ms = now_ms
             monitor.process_cycle(now_ms)
+        time.sleep_ms(5)
 
 
 if __name__ == "__main__":
