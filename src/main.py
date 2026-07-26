@@ -44,6 +44,7 @@ class SmartCoolerMonitor:
 
         # Variáveis de Estado
         self.baseline_temp = self.read_temperature()
+        self.last_baseline_update_ms = time.ticks_ms()
         self.door_open_start_ms = None
 
         # Flags de Alarme
@@ -107,6 +108,11 @@ class SmartCoolerMonitor:
         if delta_t >= TEMP_DELTA_THRESHOLD and not self.alarm_temp_active:
             print(MSG_ALARM_TEMP)
             self.alarm_temp_active = True
+
+        if not self.alarm_temp_active:
+            if time.ticks_diff(now_ms, self.last_baseline_update_ms) >= 1000:
+                self.baseline_temp = current_temp
+                self.last_baseline_update_ms = now_ms
 
         # 3. Lógica de Restauração e Normalização do Sistema
         in_alarm = self.alarm_door_active or self.alarm_temp_active
