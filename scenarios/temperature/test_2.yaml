@@ -1,5 +1,6 @@
 name: 'Caso de Teste 2: Alarme por Elevação Térmica (Variação Y)'
 version: 1
+timeout: 15000
 author: 'Professor/Validador'
 steps:
   # 1. Aguarda inicialização
@@ -14,7 +15,7 @@ steps:
       part-id: btn1
       control: pressed
       value: 1
-  - delay: 1s
+  - delay: 2s
 
   # 3. Simula uma subida brusca de temperatura acima do limite Y (Ex: se Y = 3°C, sobe para 24°C)
   - set-control:
@@ -26,3 +27,4 @@ steps:
   - wait-serial: 'ALERTA: Degradacao termica detectada!'
   
   - delay: 500ms
+  - finish: true

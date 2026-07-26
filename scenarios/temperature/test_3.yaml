@@ -1,5 +1,6 @@
 name: 'Caso de Teste 3: Retorno ao Estado Normal (Cessação do Alarme)'
 version: 1
+timeout: 15000
 author: 'Professor/Validador'
 steps:
   # 1. Aguarda inicialização e força estado de alarme deixando a porta aberta
@@ -23,3 +24,4 @@ steps:
   - wait-serial: 'Status: Sistema Normalizado.'
   
   - delay: 500ms
+  - finish: true
