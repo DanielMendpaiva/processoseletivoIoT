@@ -274,8 +274,8 @@ Preencha todas as seções abaixo de forma **clara, objetiva e técnica**.
 
 ### Identificação do Candidato
 
-- **Nome completo:**
-- **GitHub:**
+- **Nome completo:** Daniel Mendonça Paiva
+- **GitHub:** https://github.com/DanielMendpaiva/processoseletivoIoT.git
 
 ---
 
@@ -286,6 +286,16 @@ Descreva, em poucas palavras:
 - Qual é o objetivo do seu projeto
 - O que o sistema embarcado simulado faz
 - Como o usuário interage com ele (se aplicável)
+
+O objetivo deste projeto é desenvolver uma solução embarcada de baixo custo para controle de qualidade e auditoria em ambientes com temperatura controlada (ex.: câmaras frigoríficas, estufas de incubação ou painéis elétricos industriais). 
+
+O sistema monitora a integridade do isolamento térmico e físico prevenindo a degradação de insumos sensíveis ou o sobreaquecimento de componentes através de duas lógicas de segurança operadas concorrentemente:
+
+1. **Monitoramento do Tempo de Exposição (Porta Aberta):** Detecção contínua do estado físico da porta/tampa e disparo de alarme caso o tempo de abertura exceda o limite parametrizado constante x = 5000ms.
+
+2. **Monitoramento de Variação Térmica Abrupta ($\Delta T$):** Monitoramento do gradiente térmico da câmara em relação à temperatura de referência estável, disparando alarme caso o incremento ultrapasse a tolerância Y = 3°C.
+
+3. **Restauração e Normalização de Estado:** Recuperação automática do estado seguro apenas quando **ambas** as condições de risco cessarem simultaneamente.
 
 ---
 
@@ -299,6 +309,67 @@ Explique a arquitetura lógica do seu projeto, abordando:
 
 Se desejar, utilize tópicos ou um pequeno diagrama em texto.
 
+┌────────────────────────────────────────────────────────────────────────┐
+│                          PERIFÉRICOS DE HARDWARE                       │
+│  ┌───────────────────────┐              ┌───────────────────────────┐  │
+│  │ MPU6050 Sensor (imu1) │              │ Sensor de Porta (btn1)    │  │
+│  │ Barramento I2C (0x68) │              │ Pino Digital GPIO4        │  │
+│  └───────────┬───────────┘              └─────────────┬─────────────┘  │
+└──────────────┼────────────────────────────────────────┼────────────────┘
+               │ (Temp em °C)                           │ (Estado 0/1)
+               ▼                                        ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                      FLUXO PRINCIPAL (src/main.py)                     │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ Class SmartCoolerMonitor (POO)                                   │  │
+│  │                                                                  │  │
+│  │  1. Temporizador Não-Bloqueante: time.ticks_ms()                 │  │
+│  │  2. Cálculo de Gradiente: Delta T = Temp_atual - Temp_referencia │  │
+│  │  3. Monitor de Exposição: Elapsed = time.ticks_diff(now, start)  │  │
+│  └──────────────────────────────┬───────────────────────────────────┘  │
+└─────────────────────────────────┼──────────────────────────────────────┘
+                                  │ (Logs UART 115200 baud)
+                                  ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                          SAÍDA SERIAL / WOKWI CI                       │
+│  • "Sistema de Monitoramento Inicializado"                             │
+│  • "ALERTA: Porta aberta por muito tempo!"                             │
+│  • "ALERTA: Degradacao termica detectada!"                             │
+│  • "Status: Sistema Normalizado."                                      │
+└────────────────────────────────────────────────────────────────────────┘
+
+1. Fluxo Principal do Programa (src/main.py)
+Inicialização: A função main() instancia o objeto SmartCoolerMonitor(). O construtor configura o pino digital GPIO4, acorda o MPU6050 enviando o byte 0x00 para o registrador PWR_MGMT_1 (0x6B), armazena a temperatura inicial estável como referência (baseline_temp) e imprime no terminal a mensagem obrigatória: "Sistema de Monitoramento Inicializado".
+
+Loop Principal (Polling Loop): O loop while True monitora continuamente o tempo interno do microcontrolador via time.ticks_ms(). A cada 100ms, o método process_cycle() é invocado de forma assíncrona para reavaliar os sensores.
+
+2. Estrutura de Estados, Loops e Temporizações
+Máquina de Estados Finitos (FSM): O sistema opera alternando entre quatro estados lógicos principais: Normal, Alerta de Porta Aberta, Alerta de Elevação Térmica e Normalizado.
+
+Concorrência Não-Bloqueante: Toda a temporização utiliza a função time.ticks_diff(now_ms, start_ms) em vez de time.sleep(). Isso garante que o microcontrolador permaneça reativo a mudanças bruscas de sinais sem congelar a execução da CPU.
+
+Monitor de Tempo de Porta (X = 5000 ms)
+Se o botão btn1 for solto (pressed: 0), o relógio marca o instante inicial. Caso a porta continue aberta por 5000 ms contínuos, a flag alarm_door_active é ativada e o alerta de exposição é emitido.
+
+Monitor de Variação Térmica (ΔT >= 3°C)
+A cada ciclo, calcula-se a variação térmica através da fórmula: ΔT = Tatual - Treferência. Se a variação atingir ou superar 3.0 °C, a flag alarm_temp_active é acionada.
+
+Normalização Automática
+Se o sistema estiver em estado de alarme, mas o botão for pressionado (btn1: 1 - porta fechada) E a variação de temperatura cair abaixo de 3.0 °C, o sistema emite a mensagem "Status: Sistema Normalizado." e redefine a temperatura de referência.
+
+
+3. Interação entre Componentes
+
+MPU6050 para ESP32 (I2C)
+A comunicação I2C lê os registradores de alta e baixa ordem (0x41 e 0x42), convertendo o valor numérico de 16 bits assinado para graus Celsius através da relação física:
+T = (raw / 340.0) + 36.53
+
+Pushbutton btn1 para ESP32 (GPIO)
+O pino digital GPIO4 lê a mudança de nível lógico correspondente ao estado físico da porta/tampa (0 para aberta, 1 para fechada).
+
+ESP32 para Wokwi CI (UART Serial)
+Todas as mudanças relevantes de estado imprimem mensagens padronizadas no barramento serial TX/RX, permitindo que a esteira automatizada do GitHub Actions valide o cumprimento das regras do edital.
+
 ---
 
 ## Componentes Utilizados na Simulação
@@ -308,6 +379,27 @@ Liste os principais componentes definidos no `diagram.json`, por exemplo:
 - Tipo de placa utilizada
 - LEDs, botões, sensores, atuadores, etc.
 - Função de cada componente no sistema
+
+A arquitetura de hardware virtual do projeto foi projetada e mapeada no arquivo diagram.json utilizando o ecossistema de simulação do Wokwi. O sistema é construído em torno da placa microcontroladora ESP32 DevKit C v4, integrando um sensor inercial e de temperatura MPU6050 via barramento de comunicação I2C e um botão mecânico de fim de curso configurado como sensor digital de porta. O monitor serial embutido na interface UART é utilizado como o periférico de saída de telemetria, permitindo que os logs operacionais e os alarmes de segurança sejam transmitidos e validados pela esteira de integração contínua (CI).
+
+1. Microcontrolador Principal: ESP32 DevKit C v4 (id: "esp")
+Tipo de componente: board-esp32-devkit-c-v4
+Função no sistema: Atua como a Unidade Central de Processamento do sistema embarcado. Executa o firmware em MicroPython, gerencia a temporização assíncrona de hardware, processa a comunicação I2C com o sensor de temperatura, monitora o estado lógico do pino da porta e transmite os eventos de status via comunicação serial UART.
+
+2. Sensor de Temperatura Ambiente: MPU6050 IMU (id: "imu1")
+Tipo de componente: wokwi-mpu6050
+Conexões de pino: Alimentado em 3V3 e GND; conectado aos pinos de comunicação I2C do ESP32 (GPIO21 - SDA / GPIO22 - SCL).
+Função no sistema: Responsável pelo monitoramento térmico contínuo do ambiente interno (câmara refrigerada ou estufa). Fornece as leituras brutas dos registradores de temperatura via endereço I2C 0x68, permitindo ao firmware calcular o gradiente de variação térmica (ΔT) em relação à temperatura de referência estável.
+
+3. Sensor Físico de Porta: Pushbutton Fim de Curso (id: "btn1")
+Tipo de componente: wokwi-pushbutton
+Conexões de pino: Pino 1.A conectado ao GPIO4 e pino 2.A conectado ao 3V3 do ESP32.
+Função no sistema: Atua como o sensor de posição/abertura da porta. Quando a porta está fechada, o botão permanece pressionado (pressed: 1), mantendo o pino GPIO4 em nível lógico alto (1). Quando a porta é aberta, o botão é solto (pressed: 0), alterando o pino para nível lógico baixo (0) e disparando a contagem do temporizador de exposição.
+
+4. Interface de Telemetria e Saída: Monitor Serial UART (id: "$serialMonitor")
+Tipo de componente: Terminal de Comunicação Serial (TX/RX)
+Conexões de pino: Interconectado aos pinos de transmissão de dados do ESP32 (esp:TX e esp:RX).
+Função no sistema: Canal de saída responsável pela transmissão dos logs de eventos em tempo real (inicialização, alertas de porta aberta, degradação térmica e restauração de status) com taxa de transmissão de 115200 baud, permitindo a validação automática pela esteira Wokwi CI.
 
 ---
 
@@ -319,6 +411,15 @@ Explique brevemente decisões importantes tomadas durante o desenvolvimento, com
 - Uso de funções, estados ou constantes
 - Estratégias para temporização ou controle lógico
 
+1. Programação Orientada a Objetos (POO): Encapsulamento de toda a lógica na classe SmartCoolerMonitor, eliminando variáveis globais soltas e isolando o escopo de estado do sistema.
+
+2. Temporização Não-Bloqueante (Zero time.sleep()): Uso exclusivo de time.ticks_ms() e time.ticks_diff(), garantindo que a CPU do ESP32 leia sensores e botões sem travar a execução.
+
+3. Constantes Declarativas (Clean Code): Eliminação de "números mágicos", agrupando todos os pinos, limiares de segurança (5000ms
+e 3°C) e mensagens no topo do código.
+
+4. Máquina de Estados (FSM) e Gestão de Logs: Controle por flags booleanas (alarm_door_active e alarm_temp_active), evitando duplicação de mensagens seriais e garantindo emissão única nos eventos de alarme e normalização.
+
 ---
 
 ## Resultados Obtidos
@@ -328,6 +429,19 @@ Descreva o comportamento final do sistema:
 - O que funciona corretamente
 - Quais requisitos foram atendidos
 - Resultado observado na simulação do Wokwi
+
+1. Desempenho Funcional e Validação dos Alarmes:
+
+Inicialização Limpa: Ao energizar a placa ESP32, o firmware configura o barramento I2C, retira o sensor MPU6050 do modo de repouso e imprime a mensagem exata de boot no terminal: "Sistema de Monitoramento Inicializado".
+Detecção de Porta Aberta (Caso de Teste 1): Quando a porta é aberta (botão btn1 solto), o temporizador interno é iniciado. Ao completar exatamente 5000 ms (5 segundos) contínuos sem o fechamento da porta, o sistema emite o log "ALERTA: Porta aberta por muito tempo!". Testes intermediários com tempos menores (ex: 3 segundos de exposição) comprovaram que o alarme não dispara precocemente.
+Monitoramento de Variação Térmica (Caso de Teste 2): Enquanto a porta permanece fechada, o sistema armazena a temperatura de referência inicial (ex: 20 °C). Ao simular uma subida brusca para 24 °C (variação de Delta T igual a 4.0 °C, superando o limite de 3.0 °C), o algoritmo identifica a anomalia no ciclo de amostragem de 100ms e dispara o log "ALERTA: Degradacao termica detectada!".
+Restauração e Normalização de Status (Caso de Teste 3): Estando o sistema em estado de alarme, a simulação do fechamento da porta (botão btn1 pressionado) combinada à temperatura estável aciona a rotina de recuperação. O firmware emite a mensagem "Status: Sistema Normalizado.", limpa os sinalizadores de erro e atualiza a temperatura de referência para o novo valor ambiente.
+
+2. Confiabilidade e Comportamento na Esteira Wokwi CI:
+
+Aprovação Integral: Obteve-se status PASS (100% de aprovação) em todos os três cenários de testes automatizados (test_1.yaml, test_2.yaml e test_3.yaml).
+Fidelidade de Caracteres: A saída na interface UART (115200 baud) respondeu com precisão estrita de maiúsculas, minúsculas e pontuação exigida pelo validador, sem emitir mensagens duplicadas a cada ciclo de relógio.
+Reatividade da CPU: O uso de temporizadores assíncronos baseados no relógio de hardware (ticks_ms) garantiu uma taxa de amostragem estável a cada 100ms, eliminando qualquer risco de travamento do processador ou perda de leitura de eventos.
 
 ---
 
